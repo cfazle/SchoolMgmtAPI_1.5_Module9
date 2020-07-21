@@ -1,12 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using AutoMapper;
 using Contracts;
 using Entities.DataTransferObjects;
 using Entities.Models;
+using Entities.RequestFeatures;
 using Microsoft.AspNetCore.JsonPatch;
 using Microsoft.AspNetCore.Mvc;
 using Nest;
+using SchoolMgmtAPI.ActionFilters;
 
 namespace SchoolMgmtAPI.Controllers
 {
@@ -26,10 +29,10 @@ namespace SchoolMgmtAPI.Controllers
         }
 
         [HttpGet]
-        public IActionResult GetCoursesForUser(Guid userId)
+        public async Task <IActionResult> GetCoursesForUser(Guid userId)
 
         {
-            var user = _repository.User.GetUsers(userId, trackChanges: false);
+            var user = await _repository.User.GetUsersAsync(userId,  trackChanges: false);
 
             if (user == null)
             {
@@ -37,7 +40,7 @@ namespace SchoolMgmtAPI.Controllers
                 return NotFound();
             }
 
-            var coursesFromDb = _repository.Course.GetCourses(userId, trackChanges: false);
+            var coursesFromDb =await _repository.Course.GetCoursesAsync(userId,  trackChanges: false);
 
             var coursesDto = _mapper.Map<IEnumerable<CourseDto>>(coursesFromDb);
 
@@ -47,16 +50,16 @@ namespace SchoolMgmtAPI.Controllers
        //    [HttpGet("{id}", Name = "GetCourseForUser")]
 
        [HttpGet("{id}")]
-        public IActionResult GetCourseForUser(Guid userId, Guid id)
+        public async Task <IActionResult> GetCourseForUser(Guid userId, Guid id)
         {
-            var organization = _repository.User.GetUsers(userId, trackChanges: false);
-            if (organization == null)
+            var user = await _repository.User.GetUsersAsync(userId,  trackChanges: false);
+            if (user == null)
             {
                 _logger.LogInfo($"User with id: {userId} doesn't exist in the database.");
                 return NotFound();
             }
 
-            var courseDb = _repository.Course.GetCourse(userId, id, trackChanges: false);
+            var courseDb =await _repository.Course.GetCourseAsync(userId, id, trackChanges: false);
             if (courseDb == null)
             {
                 _logger.LogInfo($"Course with id: {id} doesn't exist in the database.");
@@ -69,29 +72,38 @@ namespace SchoolMgmtAPI.Controllers
         }
 
         [HttpPost]
-        public IActionResult CreateCourseForUser( Guid userId, [FromBody] CourseForCreationDto course)
+        [ServiceFilter(typeof(ValidationFilterAttribute))]
+        public async Task <IActionResult> CreateCourseForUser( Guid userId, [FromBody]
+        CourseForCreationDto course)
         {
-            if (course == null)
+          /*  if (course == null)
             {
                 _logger.LogError("CourseForCreationDto object sent from client is null.");
                 return BadRequest("CourseForCreationDto object is null");
             }
 
+            if (!ModelState.IsValid)
+            {
+                _logger.LogError("Invalid model state for the EmployeeForCreationDto object");
+
+                return UnprocessableEntity(ModelState);
+            }
+
             //    var organization = _repository.Company.GetCompany(companyId, trackChanges: false);
-            var user = _repository.User.GetUsers( userId,  trackChanges: false);
+            var user = await  _repository.User.GetUsersAsync( userId,  trackChanges: false);
 
             if (user == null)
             {
                 _logger.LogInfo($"User with id: {userId} doesn't exist in the database.");
                 return NotFound();
-            }
+            } */
 
             var courseEntity = _mapper.Map<Course>(course);
 
             //      _repository.Employee.CreateEmployeeForCompany(companyId, employeeEntity);
 
             _repository.Course.CreateCourseForUser(userId, courseEntity);
-            _repository.Save();
+           await _repository.SaveAsync();
 
             var courseToReturn = _mapper.Map<CourseDto>(courseEntity);
 
@@ -99,65 +111,76 @@ namespace SchoolMgmtAPI.Controllers
         }
 
         [HttpDelete("{id}")]
-        public IActionResult DeleteCourseForUser(Guid userId, Guid id)
+        [ServiceFilter(typeof(ValidateCourseExistsAttribute))]
+        public async Task <IActionResult> DeleteCourseForUser(Guid userId, Guid id)
         {
-            var user = _repository.User.GetUsers(userId, trackChanges: false);
-            if (user == null)
-            {
-                _logger.LogInfo($"User with id: {userId} doesn't exist in the database.");
-                return NotFound();
-            }
+            /*  var user = await _repository.User.GetUsersAsync(userId, trackChanges: false);
+              if (user == null)
+              {
+                  _logger.LogInfo($"User with id: {userId} doesn't exist in the database.");
+                  return NotFound();
+              }
 
-            var courseForUser = _repository.Course.GetCourse(userId, id, trackChanges: false);
-            if (courseForUser == null)
-            {
-                _logger.LogInfo($"User with id: {id} doesn't exist in the database.");
-                return NotFound();
-            }
+              var courseForUser =await _repository.Course.GetCourseAsync(userId, id, trackChanges: false);
+              if (courseForUser == null)
+              {
+                  _logger.LogInfo($"User with id: {id} doesn't exist in the database.");
+                  return NotFound();
+              } */
+            var courseForUser = HttpContext.Items["course"] as Course;
 
             _repository.Course.DeleteCourse(courseForUser);
-            _repository.Save();
+
+           await _repository.SaveAsync();
 
             return NoContent();
+
+
         }
 
         [HttpPut("{id}")]
-        public IActionResult UpdateCourseForUser(Guid userId, Guid id, [FromBody] CourseForUpdateDto course)
+        [ServiceFilter(typeof(ValidationFilterAttribute))]
+        [ServiceFilter(typeof(ValidateCourseExistsAttribute))]
+        public async Task <IActionResult> UpdateCourseForUser(Guid userId, Guid id, [FromBody] CourseForUpdateDto course)
         {
-            if (course == null)
-            {
-                _logger.LogError("CourseForUpdateDto object sent from client is null.");
-                return BadRequest("CourseForUpdateDto object is null");
-            }
+            /*  if (course == null)
+              {
+                  _logger.LogError("CourseForUpdateDto object sent from client is null.");
+                  return BadRequest("CourseForUpdateDto object is null");
+              }
 
-            if (!ModelState.IsValid)
-            {
-                _logger.LogError("Invalid model state for the EmployeeForUpdateDto object");
-                return UnprocessableEntity(ModelState);
-            }
+              if (!ModelState.IsValid)
+              {
+                  _logger.LogError("Invalid model state for the EmployeeForUpdateDto object");
+                  return UnprocessableEntity(ModelState);
+              }
 
-            var user = _repository.User.GetUsers(userId, trackChanges: false);
-            if (user == null)
-            {
-                _logger.LogInfo($"User with id: {userId} doesn't exist in the database.");
-                return NotFound();
-            }
+              var user = await _repository.User.GetUsersAsync(userId, trackChanges: false);
+              if (user == null)
+              {
+                  _logger.LogInfo($"User with id: {userId} doesn't exist in the database.");
+                  return NotFound();
+              } 
 
-            var courseEntity = _repository.Course.GetCourse(userId, id, trackChanges: true);
-            if (courseEntity == null)
-            {
-                _logger.LogInfo($"Course with id: {id} doesn't exist in the database.");
-                return NotFound();
-            }
+              var courseEntity = await _repository.Course.GetCourseAsync(userId, id, trackChanges: true);
+              if (courseEntity == null)
+              {
+                  _logger.LogInfo($"Course with id: {id} doesn't exist in the database.");
+                  return NotFound();
+              } */
+
+            var courseEntity = HttpContext.Items["Course"] as Course;
 
             _mapper.Map(course, courseEntity);
-            _repository.Save();
+          await  _repository.SaveAsync();
 
             return NoContent();
         }
 
         [HttpPatch("{id}")]
-        public IActionResult PartiallyUpdateCourseForUser(Guid userId, Guid id, [FromBody] JsonPatchDocument<CourseForUpdateDto> patchDoc)
+        [ServiceFilter(typeof(ValidateCourseExistsAttribute))]
+        public async Task <IActionResult> PartiallyUpdateCourseForUser(Guid userId, 
+            Guid id, [FromBody] JsonPatchDocument<CourseForUpdateDto> patchDoc)
         {
             if (patchDoc == null)
             {
@@ -165,19 +188,21 @@ namespace SchoolMgmtAPI.Controllers
                 return BadRequest("patchDoc object is null");
             }
 
-            var user = _repository.User.GetUsers(userId, trackChanges: false);
-            if (user == null)
-            {
-                _logger.LogInfo($"User with id: {userId} doesn't exist in the database.");
-                return NotFound();
-            }
+            /*     var user = await _repository.User.GetUsersAsync(userId, trackChanges: false);
+                 if (user == null)
+                 {
+                     _logger.LogInfo($"User with id: {userId} doesn't exist in the database.");
+                     return NotFound();
+                 }
 
-            var courseEntity = _repository.Course.GetCourse(userId, id, trackChanges: true);
-            if (courseEntity == null)
-            {
-                _logger.LogInfo($"Course with id: {id} doesn't exist in the database.");
-                return NotFound();
-            }
+                 var courseEntity = await _repository.Course.GetCourseAsync(userId, id, trackChanges: true);
+                 if (courseEntity == null)
+                 {
+                     _logger.LogInfo($"Course with id: {id} doesn't exist in the database.");
+                     return NotFound();
+                 }  */
+
+            var courseEntity = HttpContext.Items["course"] as Course;
 
             var courseToPatch = _mapper.Map<CourseForUpdateDto>(courseEntity);
 
@@ -195,7 +220,7 @@ namespace SchoolMgmtAPI.Controllers
 
             _mapper.Map(courseToPatch, courseEntity);
 
-            _repository.Save();
+           await _repository.SaveAsync();
 
             return NoContent();
         }

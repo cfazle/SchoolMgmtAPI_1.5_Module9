@@ -9,6 +9,8 @@ using Entities.Models;
 using Entities.DataTransferObjects;
 using SchoolMgmtAPI.ModelBinders;
 using Microsoft.AspNetCore.JsonPatch;
+using System.Threading.Tasks;
+using SchoolMgmtAPI.ActionFilters;
 
 namespace SchoolMgmtAPI.Controllers
 {
@@ -30,10 +32,10 @@ namespace SchoolMgmtAPI.Controllers
 
         [HttpGet]
 
-        public IActionResult GetOrganizations()
+        public async Task <IActionResult> GetOrganizations()
         {
 
-            var organizations = _repository.Organization.GetAllOrganizations(trackChanges: false);
+            var organizations = await _repository.Organization.GetAllOrganizationsAsync(trackChanges: false);
             //  return Ok(organizations);
             var organizationDto = _mapper.Map<IEnumerable<OrganizationDto>>(organizations);
             return Ok(organizationDto);
@@ -42,10 +44,10 @@ namespace SchoolMgmtAPI.Controllers
 
         [HttpGet("{id}", Name = "OrganizationById")]
 
-        public IActionResult GetOrganization(Guid id)
+        public async Task <IActionResult> GetOrganization(Guid id)
         {
 
-            var organization = _repository.Organization.GetOrganization(id, trackChanges: false);
+            var organization = await _repository.Organization.GetOrganizationAsync(id, trackChanges: false);
             if (organization == null)
             {
                 _logger.LogInfo($"Organization with id: {id} doesn't exist in the database.");
@@ -61,7 +63,7 @@ namespace SchoolMgmtAPI.Controllers
         }
 
         [HttpGet("collection/({ids})", Name = "OrganizationCollection")]
-        public IActionResult GetOrganizationCollection([ModelBinder(BinderType = typeof(ArrayModelBinder))]
+        public async Task <IActionResult> GetOrganizationCollection([ModelBinder(BinderType = typeof(ArrayModelBinder))]
         IEnumerable<Guid> ids)
         //  public IActionResult GetOrganizationCollection(IEnumerable<Guid> ids)
         {
@@ -71,7 +73,7 @@ namespace SchoolMgmtAPI.Controllers
                 return BadRequest("Parameter ids is null");
             }
 
-            var organizationEntities = _repository.Organization.GetByIds(ids, trackChanges: false);
+            var organizationEntities =await _repository.Organization.GetByIdsAsync(ids, trackChanges: false);
 
             if (ids.Count() != organizationEntities.Count())
             {
@@ -85,21 +87,23 @@ namespace SchoolMgmtAPI.Controllers
 
 
         [HttpPost]
-        public IActionResult CreateOrganization([FromBody] OrganizationForCreationDto organization)
+        [ServiceFilter(typeof(ValidationFilterAttribute))]
+
+        public async Task <IActionResult> CreateOrganization([FromBody] OrganizationForCreationDto organization)
         {
-            if (organization == null)
+          /*  if (organization == null)
             {
                 _logger.LogError("CompanyForCreationDto object sent from client is null.");
 
                 return BadRequest("CompanyForCreationDto object is null");
             }
+          */
 
-
-            var organizationEntity = _mapper.Map<Organization>(organization);
+            var organizationEntity =  _mapper.Map<Organization>(organization);
 
             _repository.Organization.CreateOrganization(organizationEntity);
 
-            _repository.Save();
+           await _repository.SaveAsync();
 
             var organizationToReturn = _mapper.Map<OrganizationDto>(organizationEntity);
 
@@ -109,10 +113,10 @@ namespace SchoolMgmtAPI.Controllers
         }
 
         [HttpPost("collection")]
-        public IActionResult CreateOrganizationCollection([FromBody]
+        public async Task < IActionResult> CreateOrganizationCollection([FromBody]
         IEnumerable<OrganizationForCreationDto> organizationCollection)
         {
-            if (organizationCollection == null)
+           if (organizationCollection == null)
             {
                 _logger.LogError("Organization collection sent from client is null.");
                 return BadRequest("Organization collection is null");
@@ -124,7 +128,7 @@ namespace SchoolMgmtAPI.Controllers
                 _repository.Organization.CreateOrganization(organization);
             }
 
-            _repository.Save();
+           await _repository.SaveAsync();
 
             var organizationCollectionToReturn = _mapper.Map<IEnumerable<OrganizationDto>>
                 (organizationEntities);
@@ -134,9 +138,10 @@ namespace SchoolMgmtAPI.Controllers
         }
 
         [HttpDelete("{id}")]
-        public IActionResult DeleteOrganization(Guid id)
+        [ServiceFilter(typeof(ValidateOrganizationExistsAttribute))]
+        public async Task < IActionResult> DeleteOrganization(Guid id)
         {
-            var organization = _repository.Organization.GetOrganization(id, trackChanges: false);
+            var organization = await _repository.Organization.GetOrganizationAsync(id, trackChanges: false);
             if (organization == null)
             {
                 _logger.LogInfo($"Company with id: {id} doesn't exist in the database.");
@@ -144,40 +149,44 @@ namespace SchoolMgmtAPI.Controllers
             }
 
             _repository.Organization.DeleteOrganization(organization);
-            _repository.Save();
+            await _repository.SaveAsync();
 
             return NoContent();
         }
 
         [HttpPut("{id}")]
-        public IActionResult UpdateOrganization(Guid id, [FromBody] OrganizationForUpdateDto organization)
+        [ServiceFilter(typeof(ValidationFilterAttribute))]
+        [ServiceFilter(typeof(ValidateOrganizationExistsAttribute))]
+        public async Task <IActionResult> UpdateOrganization(Guid id, [FromBody] OrganizationForUpdateDto organization)
         {
-            if (organization == null)
-            {
-                _logger.LogError("OrganizationForUpdateDto object sent from client is null.");
-                return BadRequest("OrganizationForUpdateDto object is null");
-            }
+            /*   if (organization == null)
+               {
+                   _logger.LogError("OrganizationForUpdateDto object sent from client is null.");
+                   return BadRequest("OrganizationForUpdateDto object is null");
+               }
 
-            if (!ModelState.IsValid) {
-                _logger.LogError("Invalid model state for the EmployeeForUpdateDto object");
-                return UnprocessableEntity(ModelState);
-            }
+               if (!ModelState.IsValid) {
+                   _logger.LogError("Invalid model state for the EmployeeForUpdateDto object");
+                   return UnprocessableEntity(ModelState);
+               } */
 
-            var organizationEntity = _repository.Organization.GetOrganization(id, trackChanges: true);
+            var organizationEntity = HttpContext.Items["organization"] as Organization;
+
+       /*     var organizationEntity = await _repository.Organization.GetOrganizationAsync(id, trackChanges: true);
             if (organizationEntity == null)
             {
                 _logger.LogInfo($"Organization with id: {id} doesn't exist in the database.");
                 return NotFound();
-            }
+            } */
 
             _mapper.Map(organization, organizationEntity);
-            _repository.Save();
+           await _repository.SaveAsync();
 
             return NoContent();
         }
 
         [HttpPatch("{id}")]
-        public IActionResult PartiallyUpdateOrganization( Guid id, [FromBody] JsonPatchDocument<OrganizationForUpdateDto> patchDoc)
+        public async Task <IActionResult> PartiallyUpdateOrganization( Guid id, [FromBody] JsonPatchDocument<OrganizationForUpdateDto> patchDoc)
         {
             if (patchDoc == null)
             {
@@ -192,7 +201,7 @@ namespace SchoolMgmtAPI.Controllers
                 return NotFound();
             } */
 
-            var organizationEntity = _repository.Organization.GetOrganization( id, trackChanges: true);
+            var organizationEntity = await _repository.Organization.GetOrganizationAsync( id, trackChanges: true);
             if (organizationEntity == null)
             {
                 _logger.LogInfo($"Organization with id: {id} doesn't exist in the database.");
@@ -213,7 +222,7 @@ namespace SchoolMgmtAPI.Controllers
 
             _mapper.Map(organizationToPatch, organizationEntity);
 
-            _repository.Save();
+            await _repository.SaveAsync();
 
             return NoContent();
         }

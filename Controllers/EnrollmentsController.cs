@@ -1,11 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using AutoMapper;
 using Contracts;
 using Entities.DataTransferObjects;
 using Entities.Models;
 using Microsoft.AspNetCore.JsonPatch;
 using Microsoft.AspNetCore.Mvc;
+using SchoolMgmtAPI.ActionFilters;
 
 namespace SchoolMgmtAPI.Controllers
 {
@@ -25,10 +27,10 @@ namespace SchoolMgmtAPI.Controllers
         }
 
         [HttpGet]
-        public IActionResult GetEnrollmentsForSection(Guid sectionId)
+        public async Task < IActionResult> GetEnrollmentsForSection(Guid sectionId)
 
         {
-            var section = _repository.Section.GetSections(sectionId, trackChanges: false);
+            var section = await _repository.Section.GetSectionsAsync(sectionId, trackChanges: false);
 
             if (section == null)
             {
@@ -36,7 +38,7 @@ namespace SchoolMgmtAPI.Controllers
                 return NotFound();
             }
 
-            var enrollmentsFromDb = _repository.Enrollment.GetEnrollments(sectionId, trackChanges: false);
+            var enrollmentsFromDb = await _repository.Enrollment.GetEnrollmentsAsync(sectionId, trackChanges: false);
 
             var enrollmentsDto = _mapper.Map<IEnumerable<EnrollmentDto>>(enrollmentsFromDb);
 
@@ -44,16 +46,16 @@ namespace SchoolMgmtAPI.Controllers
         }
 
         [HttpGet("{id}")]
-        public IActionResult GetEnrollmentForSection(Guid sectionId, Guid id)
+        public async Task <IActionResult> GetEnrollmentForSection(Guid sectionId, Guid id)
         {
-            var organization = _repository.Section.GetSections(sectionId, trackChanges: false);
+            var organization = await _repository.Section.GetSectionsAsync(sectionId, trackChanges: false);
             if (organization == null)
             {
                 _logger.LogInfo($"Section with id: {sectionId} doesn't exist in the database.");
                 return NotFound();
             }
 
-            var enrollmentDb = _repository.Enrollment.GetEnrollment(sectionId, id, trackChanges: false);
+            var enrollmentDb =await _repository.Enrollment.GetEnrollmentAsync(sectionId, id, trackChanges: false);
             if (enrollmentDb == null)
             {
                 _logger.LogInfo($"Enrollment with id: {id} doesn't exist in the database.");
@@ -66,30 +68,32 @@ namespace SchoolMgmtAPI.Controllers
         }
 
         [HttpPost]
-        public IActionResult CreateEnrollmentForSection(Guid sectionId, [FromBody] EnrollmentForCreationDto enrollment)
+        [ServiceFilter(typeof(ValidationFilterAttribute))]
+
+        public async Task < IActionResult> CreateEnrollmentForSection(Guid sectionId, [FromBody] EnrollmentForCreationDto enrollment)
         {
-            if (enrollment == null)
+           /* if (enrollment == null)
             {
                 _logger.LogError("EnrollmentForCreationDto object sent from client is null.");
                 return BadRequest("EnrollmentForCreationDto object is null");
             }
 
             //    var organization = _repository.Company.GetCompany(companyId, trackChanges: false);
-            var section = _repository.Section.GetSections(sectionId, trackChanges: false);
+            var section = await _repository.Section.GetSectionsAsync(sectionId, trackChanges: false);
 
             if (section == null)
             {
                 _logger.LogInfo($"Section with id: {sectionId} doesn't exist in the database.");
                 return NotFound();
             }
-
+           */
 
             var enrollmentEntity = _mapper.Map<Enrollment>(enrollment);
 
             //      _repository.Employee.CreateEmployeeForCompany(companyId, employeeEntity);
 
             _repository.Enrollment.CreateEnrollmentForSection(sectionId, enrollmentEntity);
-            _repository.Save();
+           await _repository.SaveAsync();
 
             var enrollmentToReturn = _mapper.Map<EnrollmentDto>(enrollmentEntity);
 
@@ -97,66 +101,73 @@ namespace SchoolMgmtAPI.Controllers
         }
 
         [HttpDelete("{id}")]
-        public IActionResult DeleteEnrollmentForSection(Guid sectionId, Guid id)
+        [ServiceFilter(typeof(ValidateEnrollmentExistsAttribute))]
+        public async Task <IActionResult> DeleteEnrollmentForSection(Guid sectionId, Guid id)
         {
-            var section = _repository.Section.GetSections(sectionId, trackChanges: false);
-            if (section == null)
-            {
-                _logger.LogInfo($"Section with id: {sectionId} doesn't exist in the database.");
-                return NotFound();
-            }
+            /*  var section = await _repository.Section.GetSectionsAsync(sectionId, trackChanges: false);
+              if (section == null)
+              {
+                  _logger.LogInfo($"Section with id: {sectionId} doesn't exist in the database.");
+                  return NotFound();
+              }
 
-            var enrollmentForSection = _repository.Enrollment.GetEnrollment(sectionId, id, trackChanges: false);
-            if (enrollmentForSection == null)
-            {
-                _logger.LogInfo($"Enrollment with id: {id} doesn't exist in the database.");
-                return NotFound();
-            }
-
+              var enrollmentForSection =await  _repository.Enrollment.GetEnrollmentAsync(sectionId, id, trackChanges: false);
+              if (enrollmentForSection == null)
+              {
+                  _logger.LogInfo($"Enrollment with id: {id} doesn't exist in the database.");
+                  return NotFound();
+              } */
+            var enrollmentForSection = HttpContext.Items["enrollment"] as Enrollment;
             _repository.Enrollment.DeleteEnrollment(enrollmentForSection);
-            _repository.Save();
+           await _repository.SaveAsync();
 
             return NoContent();
         }
 
         [HttpPut("{id}")]
-        public IActionResult UpdateEnrollmentForSection(Guid sectionId, Guid id, [FromBody] EnrollmentForUpdateDto enrollment)
+        [ServiceFilter(typeof(ValidationFilterAttribute))]
+        [ServiceFilter(typeof(ValidateEnrollmentExistsAttribute))]
+        public async Task <IActionResult> UpdateEnrollmentForSection(Guid sectionId, Guid id, [FromBody] EnrollmentForUpdateDto enrollment)
         {
-            if (enrollment == null)
-            {
-                _logger.LogError("EnrollmentForUpdateDto object sent from client is null.");
-                return BadRequest("EnrollmentForUpdateDto object is null");
-            }
+            /*  if (enrollment == null)
+              {
+                  _logger.LogError("EnrollmentForUpdateDto object sent from client is null.");
+                  return BadRequest("EnrollmentForUpdateDto object is null");
+              }
 
-            if (!ModelState.IsValid)
-            {
-                _logger.LogError("Invalid model state for the EmployeeForUpdateDto object");
-                return UnprocessableEntity(ModelState);
-            }
+              if (!ModelState.IsValid)
+              {
+                  _logger.LogError("Invalid model state for the EmployeeForUpdateDto object");
+                  return UnprocessableEntity(ModelState);
+              }
 
 
-            var section = _repository.Section.GetSections(sectionId, trackChanges: false);
-            if (section == null)
-            {
-                _logger.LogInfo($"Section with id: {sectionId} doesn't exist in the database.");
-                return NotFound();
-            }
+              var section =await _repository.Section.GetSectionsAsync(sectionId, trackChanges: false);
+              if (section == null)
+              {
+                  _logger.LogInfo($"Section with id: {sectionId} doesn't exist in the database.");
+                  return NotFound();
+              } 
 
-            var enrollmentEntity = _repository.Enrollment.GetEnrollment(sectionId, id, trackChanges: true);
-            if (enrollmentEntity == null)
-            {
-                _logger.LogInfo($"Section with id: {id} doesn't exist in the database.");
-                return NotFound();
-            }
+              var enrollmentEntity =await _repository.Enrollment.GetEnrollmentAsync(sectionId, id, trackChanges: true);
+              if (enrollmentEntity == null)
+              {
+                  _logger.LogInfo($"Section with id: {id} doesn't exist in the database.");
+                  return NotFound();
+              } */
+
+            var enrollmentEntity = HttpContext.Items["enrollment"] as Enrollment;
+            
 
             _mapper.Map(enrollment, enrollmentEntity);
-            _repository.Save();
+           await _repository.SaveAsync();
 
             return NoContent();
         }
 
         [HttpPatch("{id}")]
-        public IActionResult PartiallyUpdateEnrollmentForSection(Guid sectionId, Guid id, [FromBody] JsonPatchDocument<EnrollmentForUpdateDto> patchDoc)
+        [ServiceFilter(typeof(ValidateEnrollmentExistsAttribute))]
+        public async Task < IActionResult> PartiallyUpdateEnrollmentForSection(Guid sectionId, Guid id, [FromBody] JsonPatchDocument<EnrollmentForUpdateDto> patchDoc)
         {
             if (patchDoc == null)
             {
@@ -164,20 +175,20 @@ namespace SchoolMgmtAPI.Controllers
                 return BadRequest("patchDoc object is null");
             }
 
-            var section = _repository.Section.GetSections(sectionId, trackChanges: false);
-            if (section == null)
-            {
-                _logger.LogInfo($"Section with id: {sectionId} doesn't exist in the database.");
-                return NotFound();
-            }
+            /*   var section = await _repository.Section.GetSectionsAsync(sectionId, trackChanges: false);
+               if (section == null)
+               {
+                   _logger.LogInfo($"Section with id: {sectionId} doesn't exist in the database.");
+                   return NotFound();
+               }
 
-            var enrollmentEntity = _repository.Enrollment.GetEnrollment(sectionId, id, trackChanges: true);
-            if (enrollmentEntity == null)
-            {
-                _logger.LogInfo($"Enrollment with id: {id} doesn't exist in the database.");
-                return NotFound();
-            }
-
+               var enrollmentEntity = await _repository.Enrollment.GetEnrollmentAsync(sectionId, id, trackChanges: true);
+               if (enrollmentEntity == null)
+               {
+                   _logger.LogInfo($"Enrollment with id: {id} doesn't exist in the database.");
+                   return NotFound();
+               } */
+            var enrollmentEntity = HttpContext.Items["enrollment"] as Enrollment;
             var enrollmentToPatch = _mapper.Map<EnrollmentForUpdateDto>(enrollmentEntity);
 
             patchDoc.ApplyTo(enrollmentToPatch, ModelState);
@@ -194,7 +205,7 @@ namespace SchoolMgmtAPI.Controllers
 
             _mapper.Map(enrollmentToPatch, enrollmentEntity);
 
-            _repository.Save();
+           await _repository.SaveAsync();
 
             return NoContent();
         }

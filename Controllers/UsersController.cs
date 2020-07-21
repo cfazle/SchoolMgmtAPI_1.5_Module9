@@ -6,6 +6,9 @@ using AutoMapper;
 using Entities.Models;
 using Entities.DataTransferObjects;
 using Microsoft.AspNetCore.JsonPatch;
+using System.Threading.Tasks;
+using System.Runtime.InteropServices;
+using SchoolMgmtAPI.ActionFilters;
 
 namespace SchoolMgmtAPI.Controllers
 {
@@ -25,10 +28,10 @@ namespace SchoolMgmtAPI.Controllers
         }
 
         [HttpGet]
-        public IActionResult GetUsersForOrganization(Guid orgId)
+        public async Task <IActionResult> GetUsersForOrganization(Guid orgId)
 
         {
-            var organization = _repository.Organization.GetOrganization(orgId, trackChanges: false);
+            var organization = await _repository.Organization.GetOrganizationAsync(orgId, trackChanges: false);
 
             if (organization == null)
             {
@@ -36,25 +39,25 @@ namespace SchoolMgmtAPI.Controllers
                 return NotFound();
             }
 
-            var usersFromDb = _repository.User.GetUsers(orgId, trackChanges: false);
+            var usersFromDb =await _repository.User.GetUsersAsync(orgId, trackChanges: false);
 
-            var usersDto = _mapper.Map<IEnumerable<UserDto>>(usersFromDb);
+            var usersDto =_mapper.Map<IEnumerable<UserDto>>(usersFromDb);
 
             return Ok(usersDto);
         }
 
          [HttpGet("{id}", Name = "GetUserForOrganization")]
        // [HttpGet("{id}")]
-        public IActionResult GetUserForOrganization(Guid orgId, Guid id)
+        public async Task <IActionResult> GetUserForOrganization(Guid orgId, Guid id)
         {
-            var organization = _repository.Organization.GetOrganization(orgId, trackChanges: false);
+            var organization = await _repository.Organization.GetOrganizationAsync(orgId, trackChanges: false);
             if (organization == null)
             {
                 _logger.LogInfo($"User with id: {orgId} doesn't exist in the database.");
                 return NotFound();
             }
 
-            var userDb = _repository.User.GetUser(orgId, id, trackChanges: false);
+            var userDb =await  _repository.User.GetUserAsync(orgId, id, trackChanges: false);
             if (userDb == null)
             {
                 _logger.LogInfo($"user with id: {id} doesn't exist in the database.");
@@ -68,36 +71,38 @@ namespace SchoolMgmtAPI.Controllers
 
 
         [HttpPost]
-        public IActionResult CreateUserForOrganization(Guid orgId, [FromBody] UserForCreationDto user)
+        [ServiceFilter(typeof(ValidationFilterAttribute))]
+        public async Task <IActionResult> CreateUserForOrganization(Guid orgId, [FromBody] UserForCreationDto user)
         {
-            if (user== null)
-            {
-                _logger.LogError("UserForCreationDto object sent from client is null.");
-                return BadRequest("UserForCreationDto object is null");
-            }
+            /*   if (user== null)
+               {
+                   _logger.LogError("UserForCreationDto object sent from client is null.");
+                   return BadRequest("UserForCreationDto object is null");
+               }
 
-            if (!ModelState.IsValid)
-            {
-                _logger.LogError("Invalid model state for the EmployeeForCreationDto object");
-              
-                return UnprocessableEntity(ModelState);
-            }
-          
+               if (!ModelState.IsValid)
+               {
+                   _logger.LogError("Invalid model state for the EmployeeForCreationDto object");
+
+                   return UnprocessableEntity(ModelState);
+               } */
+
 
             //    var organization = _repository.Company.GetCompany(companyId, trackChanges: false);
-            var organization = _repository.Organization.GetOrganization(orgId, trackChanges: false);
-            if (organization == null)
-            {
-                _logger.LogInfo($"Organization with id: {orgId} doesn't exist in the database.");
-                return NotFound();
-            }
+            /*   var organization =await _repository.Organization.GetOrganizationAsync(orgId, trackChanges: false);
+               if (organization == null)
+               {
+                   _logger.LogInfo($"Organization with id: {orgId} doesn't exist in the database.");
+                   return NotFound();
+               } */
+        //    var userEntity = HttpContext.Items["user"] as User;
 
             var userEntity = _mapper.Map<User>(user);
 
             //      _repository.Employee.CreateEmployeeForCompany(companyId, employeeEntity);
 
             _repository.User.CreateUserForOrganization(orgId, userEntity);
-            _repository.Save();
+           await _repository.SaveAsync();
 
             var userToReturn = _mapper.Map<UserDto>(userEntity);
 
@@ -106,67 +111,78 @@ namespace SchoolMgmtAPI.Controllers
         }
 
         [HttpDelete("{id}")]
-        public IActionResult DeleteUserorOrganization(Guid orgId, Guid id)
+        [ServiceFilter(typeof(ValidateUserExistsAttribute))]
+        public async Task <IActionResult> DeleteUserorOrganization(Guid orgId, Guid id)
         {
-            var organization = _repository.Organization.GetOrganization(orgId, trackChanges: false);
-            if (organization == null)
-            {
-                _logger.LogInfo($"Organization with id: {orgId} doesn't exist in the database.");
-                return NotFound();
-            }
+            /* var organization = await _repository.Organization.GetOrganizationAsync(orgId, trackChanges: false);
+             if (organization == null)
+             {
+                 _logger.LogInfo($"Organization with id: {orgId} doesn't exist in the database.");
+                 return NotFound();
+             }
 
-            var userForOrganization = _repository.User.GetUser(orgId, id, trackChanges: false);
-            if (userForOrganization == null)
-            {
-                _logger.LogInfo($"User with id: {id} doesn't exist in the database.");
-                return NotFound();
-            }
+             var userForOrganization =await  _repository.User.GetUserAsync(orgId, id, trackChanges: false);
+             if (userForOrganization == null)
+             {
+                 _logger.LogInfo($"User with id: {id} doesn't exist in the database.");
+                 return NotFound();
+             } */
+
+            var userForOrganization = HttpContext.Items["user"] as User;
 
             _repository.User.DeleteUser(userForOrganization);
-            _repository.Save();
+
+           await  _repository.SaveAsync();
 
             return NoContent();
         }
        
         
         [HttpPut("{id}")]
-        public IActionResult UpdateUserForOrganization(Guid orgId, Guid id, [FromBody] UserForUpdateDto user)
+        [ServiceFilter(typeof(ValidationFilterAttribute))]
+        [ServiceFilter(typeof(ValidateUserExistsAttribute))]
+        public async Task< IActionResult> UpdateUserForOrganization(Guid orgId, Guid id, [FromBody] UserForUpdateDto user)
         {
-            if (user == null)
-            {
-                _logger.LogError("UserForUpdateDto object sent from client is null.");
-                return BadRequest("UserForUpdateDto object is null");
-            }
+            /*  if (user == null)
+              {
+                  _logger.LogError("UserForUpdateDto object sent from client is null.");
+                  return BadRequest("UserForUpdateDto object is null");
+              }
 
-            if (!ModelState.IsValid)
-            {
-                _logger.LogError("Invalid model state for the EmployeeForUpdateDto object");
-                return UnprocessableEntity(ModelState);
-            }
+              if (!ModelState.IsValid)
+              {
+                  _logger.LogError("Invalid model state for the EmployeeForUpdateDto object");
+                  return UnprocessableEntity(ModelState);
+              }
 
 
-            var organization = _repository.Organization.GetOrganization(orgId, trackChanges: false);
-            if (organization == null)
-            {
-                _logger.LogInfo($"Organization with id: {orgId} doesn't exist in the database.");
-                return NotFound();
-            }
+              var organization = await _repository.Organization.GetOrganizationAsync(orgId, trackChanges: false);
+              if (organization == null)
+              {
+                  _logger.LogInfo($"Organization with id: {orgId} doesn't exist in the database.");
+                  return NotFound();
+              } 
 
-            var userEntity = _repository.User.GetUser(orgId, id, trackChanges: true);
-            if (userEntity == null)
-            {
-                _logger.LogInfo($"User with id: {id} doesn't exist in the database.");
-                return NotFound();
-            }
+              var userEntity = await _repository.User.GetUserAsync(orgId, id, trackChanges: true);
+              if (userEntity == null)
+              {
+                  _logger.LogInfo($"User with id: {id} doesn't exist in the database.");
+                  return NotFound();
+              } */
+
+           
+
+            var userEntity = HttpContext.Items["user"] as User;
 
             _mapper.Map(user, userEntity);
-            _repository.Save();
+           await _repository.SaveAsync();
 
             return NoContent();
         }
 
         [HttpPatch("{id}")]
-        public IActionResult PartiallyUpdateUserForOrganization(Guid orgId, Guid id, [FromBody] JsonPatchDocument<UserForUpdateDto> patchDoc)
+        [ServiceFilter(typeof(ValidateUserExistsAttribute))]
+        public async Task < IActionResult> PartiallyUpdateUserForOrganization(Guid orgId, Guid id, [FromBody] JsonPatchDocument<UserForUpdateDto> patchDoc)
         {
             if (patchDoc == null)
             {
@@ -174,20 +190,21 @@ namespace SchoolMgmtAPI.Controllers
                 return BadRequest("patchDoc object is null");
             }
 
-            var organization = _repository.Organization.GetOrganization(orgId, trackChanges: false);
-            if (organization == null)
-            {
-                _logger.LogInfo($"Company with id: {orgId} doesn't exist in the database.");
-                return NotFound();
-            }
+            /*  var organization = await _repository.Organization.GetOrganizationAsync(orgId, trackChanges: false);
+              if (organization == null)
+              {
+                  _logger.LogInfo($"Company with id: {orgId} doesn't exist in the database.");
+                  return NotFound();
+              } */
 
-            var userEntity = _repository.User.GetUser(orgId, id, trackChanges: true);
-            if (userEntity == null)
-            {
-                _logger.LogInfo($"Employee with id: {id} doesn't exist in the database.");
-                return NotFound();
-            }
+            /*   var userEntity = await _repository.User.GetUserAsync(orgId, id, trackChanges: true);
+               if (userEntity == null)
+               {
+                   _logger.LogInfo($"Employee with id: {id} doesn't exist in the database.");
+                   return NotFound();
+               } */
 
+            var userEntity = HttpContext.Items["user"] as User;
             var userToPatch = _mapper.Map<UserForUpdateDto>(userEntity);
 
             patchDoc.ApplyTo(userToPatch, ModelState);
@@ -202,7 +219,7 @@ namespace SchoolMgmtAPI.Controllers
 
             _mapper.Map(userToPatch, userEntity);
 
-            _repository.Save();
+          await  _repository.SaveAsync();
 
             return NoContent();
         }

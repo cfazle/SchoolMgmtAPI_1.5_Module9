@@ -1,11 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using AutoMapper;
 using Contracts;
 using Entities.DataTransferObjects;
 using Entities.Models;
 using Microsoft.AspNetCore.JsonPatch;
 using Microsoft.AspNetCore.Mvc;
+using SchoolMgmtAPI.ActionFilters;
 
 namespace SchoolMgmtAPI.Controllers
 {
@@ -25,10 +27,10 @@ namespace SchoolMgmtAPI.Controllers
         }
 
         [HttpGet]
-        public IActionResult GetSectionsForCourses(Guid courseId)
+        public async Task <IActionResult> GetSectionsForCourses(Guid courseId)
 
         {
-            var course = _repository.Course.GetCourses(courseId, trackChanges: false);
+            var course = await _repository.Course.GetCoursesAsync(courseId, trackChanges: false);
 
             if (course == null)
             {
@@ -36,7 +38,7 @@ namespace SchoolMgmtAPI.Controllers
                 return NotFound();
             }
 
-            var sectionsFromDb = _repository.Section.GetSections(courseId, trackChanges: false);
+            var sectionsFromDb =  await _repository.Section.GetSectionsAsync(courseId, trackChanges: false);
 
             var sectionsDto = _mapper.Map<IEnumerable<SectionDto>>(sectionsFromDb);
 
@@ -44,16 +46,16 @@ namespace SchoolMgmtAPI.Controllers
         }
 
         [HttpGet("{id}")]
-        public IActionResult GetSectionForCourse(Guid courseId, Guid id)
+        public async Task <IActionResult> GetSectionForCourse(Guid courseId, Guid id)
         {
-            var course = _repository.Course.GetCourses(courseId, trackChanges: false);
+            var course = await _repository.Course.GetCoursesAsync(courseId, trackChanges: false);
             if (course == null)
             {
                 _logger.LogInfo($"Course with id: {courseId} doesn't exist in the database.");
                 return NotFound();
             }
 
-            var sectionDb = _repository.Section.GetSection(courseId, id, trackChanges: false);
+            var sectionDb =await _repository.Section.GetSectionAsync(courseId, id, trackChanges: false);
             if (sectionDb == null)
             {
                 _logger.LogInfo($"Course with id: {id} doesn't exist in the database.");
@@ -66,22 +68,23 @@ namespace SchoolMgmtAPI.Controllers
         }
 
         [HttpPost]
-        public IActionResult CreateSectionForCourse(Guid courseId, [FromBody] SectionForCreationDto section)
+        [ServiceFilter(typeof(ValidationFilterAttribute))]
+        public async Task <IActionResult> CreateSectionForCourse(Guid courseId, [FromBody] SectionForCreationDto section)
         {
-            if (section == null)
+           /* if (section == null)
             {
                 _logger.LogError("SectionForCreationDto object sent from client is null.");
                 return BadRequest("SectionForCreationDto object is null");
             }
 
             //    var organization = _repository.Company.GetCompany(companyId, trackChanges: false);
-            var course = _repository.Course.GetCourses(courseId, trackChanges: false);
+            var course =await _repository.Course.GetCoursesAsync(courseId, trackChanges: false);
 
             if (course == null)
             {
                 _logger.LogInfo($"User with id: {courseId} doesn't exist in the database.");
                 return NotFound();
-            }
+            } */
 
 
             var sectionEntity = _mapper.Map<Section>(section);
@@ -89,7 +92,7 @@ namespace SchoolMgmtAPI.Controllers
             //      _repository.Employee.CreateEmployeeForCompany(companyId, employeeEntity);
 
             _repository.Section.CreateSectionForCourse(courseId, sectionEntity);
-            _repository.Save();
+           await _repository.SaveAsync();
 
             var sectionToReturn = _mapper.Map<SectionDto>(sectionEntity);
 
@@ -97,66 +100,73 @@ namespace SchoolMgmtAPI.Controllers
         }
 
         [HttpDelete("{id}")]
-        public IActionResult DeleteSectionForCourse(Guid courseId, Guid id)
+        [ServiceFilter(typeof(ValidateSectionExistsAttribute))]
+        public async Task <IActionResult> DeleteSectionForCourse(Guid courseId, Guid id)
         {
-            var course = _repository.Course.GetCourses(courseId, trackChanges: false);
-            if ( course==null)
-            {
-                _logger.LogInfo($"Course with id: {courseId} doesn't exist in the database.");
-                return NotFound();
-            }
+            /*  var course =  await _repository.Course.GetCoursesAsync(courseId, trackChanges: false);
+              if ( course==null)
+              {
+                  _logger.LogInfo($"Course with id: {courseId} doesn't exist in the database.");
+                  return NotFound();
+              }
 
-            var sectionForCourse = _repository.Section.GetSection(courseId, id, trackChanges: false);
-            if (sectionForCourse == null)
-            {
-                _logger.LogInfo($"Section with id: {id} doesn't exist in the database.");
-                return NotFound();
-            }
+              var sectionForCourse =await _repository.Section.GetSectionAsync(courseId, id, trackChanges: false);
+              if (sectionForCourse == null)
+              {
+                  _logger.LogInfo($"Section with id: {id} doesn't exist in the database.");
+                  return NotFound();
+              } */
+            var sectionForCourse = HttpContext.Items["section"] as Section;
 
             _repository.Section.DeleteSection(sectionForCourse);
-            _repository.Save();
+           await _repository.SaveAsync();
 
             return NoContent();
         }
 
         [HttpPut("{id}")]
-        public IActionResult UpdateSectionForCourse(Guid courseId, Guid id, [FromBody] SectionForUpdateDto section)
+        [ServiceFilter(typeof(ValidationFilterAttribute))]
+        [ServiceFilter(typeof(ValidateSectionExistsAttribute))]
+        public async Task <IActionResult> UpdateSectionForCourse(Guid courseId, Guid id, [FromBody] SectionForUpdateDto section)
         {
-            if (section== null)
-            {
-                _logger.LogError("SectionForUpdateDto object sent from client is null.");
-                return BadRequest("SectionForUpdateDto object is null");
-            }
+            /*  if (section== null)
+              {
+                  _logger.LogError("SectionForUpdateDto object sent from client is null.");
+                  return BadRequest("SectionForUpdateDto object is null");
+              }
 
-            if (!ModelState.IsValid)
-            {
-                _logger.LogError("Invalid model state for the EmployeeForUpdateDto object");
-                return UnprocessableEntity(ModelState);
-            }
+              if (!ModelState.IsValid)
+              {
+                  _logger.LogError("Invalid model state for the EmployeeForUpdateDto object");
+                  return UnprocessableEntity(ModelState);
+              }
 
 
-            var course = _repository.Course.GetCourses(courseId, trackChanges: false);
-            if (course == null)
-            {
-                _logger.LogInfo($"Coursewith id: {courseId} doesn't exist in the database.");
-                return NotFound();
-            }
+              var course = await _repository.Course.GetCoursesAsync(courseId, trackChanges: false);
+              if (course == null)
+              {
+                  _logger.LogInfo($"Coursewith id: {courseId} doesn't exist in the database.");
+                  return NotFound();
+              } 
 
-            var sectionEntity = _repository.Section.GetSection(courseId, id, trackChanges: true);
-            if (sectionEntity == null)
-            {
-                _logger.LogInfo($"Section with id: {id} doesn't exist in the database.");
-                return NotFound();
-            }
+              var sectionEntity =await _repository.Section.GetSectionAsync(courseId, id, trackChanges: true);
+              if (sectionEntity == null)
+              {
+                  _logger.LogInfo($"Section with id: {id} doesn't exist in the database.");
+                  return NotFound();
+              } */
+
+            var sectionEntity = HttpContext.Items["section"] as Section;
 
             _mapper.Map(section, sectionEntity);
-            _repository.Save();
+           await _repository.SaveAsync();
 
             return NoContent();
         }
 
         [HttpPatch("{id}")]
-        public IActionResult PartiallyUpdateSectionForCourse(Guid courseId, Guid id, [FromBody] JsonPatchDocument<SectionForUpdateDto> patchDoc)
+        [ServiceFilter(typeof(ValidateSectionExistsAttribute))]
+        public async Task < IActionResult> PartiallyUpdateSectionForCourse(Guid courseId, Guid id, [FromBody] JsonPatchDocument<SectionForUpdateDto> patchDoc)
         {
             if (patchDoc == null)
             {
@@ -164,19 +174,21 @@ namespace SchoolMgmtAPI.Controllers
                 return BadRequest("patchDoc object is null");
             }
 
-            var course = _repository.Course.GetCourses(courseId, trackChanges: false);
-            if (course == null)
-            {
-                _logger.LogInfo($"Course with id: {courseId} doesn't exist in the database.");
-                return NotFound();
-            }
+            /*  var course = await _repository.Course.GetCoursesAsync(courseId, trackChanges: false);
+              if (course == null)
+              {
+                  _logger.LogInfo($"Course with id: {courseId} doesn't exist in the database.");
+                  return NotFound();
+              }
 
-            var sectionEntity = _repository.Section.GetSection(courseId, id, trackChanges: true);
-            if (sectionEntity == null)
-            {
-                _logger.LogInfo($"Section with id: {id} doesn't exist in the database.");
-                return NotFound();
-            }
+              var sectionEntity =await _repository.Section.GetSectionAsync(courseId, id, trackChanges: true);
+              if (sectionEntity == null)
+              {
+                  _logger.LogInfo($"Section with id: {id} doesn't exist in the database.");
+                  return NotFound();
+              } */
+
+            var sectionEntity = HttpContext.Items["section"] as Section;
 
             var sectionToPatch = _mapper.Map<SectionForUpdateDto>(sectionEntity);
 
@@ -194,7 +206,7 @@ namespace SchoolMgmtAPI.Controllers
 
             _mapper.Map(sectionToPatch, sectionEntity);
 
-            _repository.Save();
+          await  _repository.SaveAsync();
 
             return NoContent();
         }

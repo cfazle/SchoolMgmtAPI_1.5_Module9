@@ -11,6 +11,7 @@ using Microsoft.Extensions.Hosting;
 using NLog;
 using System.IO;
 using Microsoft.AspNetCore.Mvc;
+using SchoolMgmtAPI.ActionFilters;
 
 namespace SchoolMgmtAPI
 {
@@ -33,6 +34,14 @@ namespace SchoolMgmtAPI
             services.ConfigureSqlContext(Configuration);
             services.ConfigureRepositoryManager();
             services.AddAutoMapper(typeof(Startup));
+            services.AddScoped<ValidationFilterAttribute>();
+            services.AddScoped<ValidateOrganizationExistsAttribute>();
+            services.AddScoped<ValidateUserExistsAttribute>();
+            services.AddScoped<ValidateCourseExistsAttribute>();
+            services.AddScoped<ValidateSectionExistsAttribute>();
+            services.AddScoped<ValidateEnrollmentExistsAttribute>();
+            services.AddScoped<ValidateAssignmentExistsAttribute>();
+            services.AddScoped<ValidateSubmissionExistsAttribute>();
 
             services.AddControllers(config =>
             {

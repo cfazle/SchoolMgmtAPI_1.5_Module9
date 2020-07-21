@@ -1,11 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using AutoMapper;
 using Contracts;
 using Entities.DataTransferObjects;
 using Entities.Models;
 using Microsoft.AspNetCore.JsonPatch;
 using Microsoft.AspNetCore.Mvc;
+using SchoolMgmtAPI.ActionFilters;
 
 namespace SchoolMgmtAPI.Controllers
 {
@@ -27,10 +29,10 @@ namespace SchoolMgmtAPI.Controllers
             }
 
             [HttpGet]
-            public IActionResult GetSubmissionsForAssignment(Guid assignmentId)
+            public async Task < IActionResult> GetSubmissionsForAssignment(Guid assignmentId)
 
             {
-                var assignment = _repository.Assignment.GetAssignments(assignmentId, trackChanges: false);
+                var assignment = await _repository.Assignment.GetAssignmentsAsync(assignmentId, trackChanges: false);
 
                 if (assignment == null)
                 {
@@ -38,23 +40,23 @@ namespace SchoolMgmtAPI.Controllers
                     return NotFound();
                 }
 
-                var submissionsFromDb = _repository.Submission.GetSubmissions(assignmentId, trackChanges: false);
+                var submissionsFromDb =await _repository.Submission.GetSubmissionsAsync(assignmentId, trackChanges: false);
 
                 var submissionsDto = _mapper.Map<IEnumerable<SubmissionDto>>(submissionsFromDb);
 
                 return Ok(submissionsDto);
             }
         [HttpGet("{id}")]
-        public IActionResult GetSubmisionForAssignment(Guid assignmentId, Guid id)
+        public  async Task <IActionResult> GetSubmisionForAssignment(Guid assignmentId, Guid id)
         {
-            var enrollment = _repository.Assignment.GetAssignments(assignmentId, trackChanges: false);
+            var enrollment = await _repository.Assignment.GetAssignmentsAsync(assignmentId, trackChanges: false);
             if (enrollment == null)
             {
                 _logger.LogInfo($"Assignment with id: {assignmentId} doesn't exist in the database.");
                 return NotFound();
             }
 
-            var submissionDb = _repository.Submission.GetSubmission(assignmentId, id, trackChanges: false);
+            var submissionDb = await _repository.Submission.GetSubmissionAsync(assignmentId, id, trackChanges: false);
             if (submissionDb == null)
             {
                 _logger.LogInfo($"Submission with id: {id} doesn't exist in the database.");
@@ -67,7 +69,9 @@ namespace SchoolMgmtAPI.Controllers
         }
 
         [HttpPost]
-        public IActionResult CreateSubmissionForAssinment(Guid assignmentId, [FromBody] SubmissionForCreationDto submission)
+        [ServiceFilter(typeof(ValidationFilterAttribute))]
+        public async Task <IActionResult> CreateSubmissionForAssinment(Guid assignmentId,
+            [FromBody] SubmissionForCreationDto submission)
         {
             if (submission == null)
             {
@@ -76,7 +80,7 @@ namespace SchoolMgmtAPI.Controllers
             }
 
             //    var organization = _repository.Company.GetCompany(companyId, trackChanges: false);
-            var assignment = _repository.Assignment.GetAssignments(assignmentId, trackChanges: false);
+            var assignment = await _repository.Assignment.GetAssignmentsAsync(assignmentId, trackChanges: false);
 
             if (assignment == null)
             {
@@ -90,73 +94,84 @@ namespace SchoolMgmtAPI.Controllers
             //      _repository.Employee.CreateEmployeeForCompany(companyId, employeeEntity);
 
             _repository.Submission.CreateSubmissionForAssignment(assignmentId, submissionEntity);
-            _repository.Save();
+          await  _repository.SaveAsync();
 
             var submissionToReturn = _mapper.Map<SubmissionDto>(submissionEntity);
 
             return CreatedAtRoute(new {assignmentId, id = submissionToReturn.Id }, submissionToReturn);
         }
+      
+        
         [HttpDelete("{id}")]
-        public IActionResult DeleteSubissionForAssignment(Guid assignmentId, Guid id)
+        [ServiceFilter(typeof(ValidateSubmissionExistsAttribute))]
+        public async Task <IActionResult> DeleteSubissionForAssignment(Guid assignmentId, Guid id)
         {
-            var assignment = _repository.Assignment.GetAssignments(assignmentId, trackChanges: false);
-            if (assignment == null)
-            {
-                _logger.LogInfo($"Enrollment with id: {assignmentId} doesn't exist in the database.");
-                return NotFound();
-            }
+            /*  var assignment = await _repository.Assignment.GetAssignmentsAsync(assignmentId, trackChanges: false);
+              if (assignment == null)
+              {
+                  _logger.LogInfo($"Enrollment with id: {assignmentId} doesn't exist in the database.");
+                  return NotFound();
+              }
 
-            var submissionForAssignment = _repository.Submission.GetSubmission(assignmentId, id, trackChanges: false);
-            if (submissionForAssignment == null)
-            {
-                _logger.LogInfo($"Submission with id: {id} doesn't exist in the database.");
-                return NotFound();
-            }
+              var submissionForAssignment = await _repository.Submission.GetSubmissionAsync(assignmentId, id, trackChanges: false);
+              if (submissionForAssignment == null)
+              {
+                  _logger.LogInfo($"Submission with id: {id} doesn't exist in the database.");
+                  return NotFound();
+              } */
+
+            var submissionForAssignment = HttpContext.Items["submission"] as Submission;
 
             _repository.Submission.DeleteSubmission(submissionForAssignment);
-            _repository.Save();
+           await _repository.SaveAsync();
 
             return NoContent();
         }
 
         [HttpPut("{id}")]
-        public IActionResult UpdateSubmissionForAssignment(Guid assignmentId, Guid id, [FromBody] SubmissionForUpdateDto submission)
+        [ServiceFilter(typeof(ValidationFilterAttribute))]
+        [ServiceFilter(typeof(ValidateSubmissionExistsAttribute))]
+        public async Task <IActionResult> UpdateSubmissionForAssignment(Guid assignmentId, Guid id, [FromBody] SubmissionForUpdateDto submission)
         {
-            if (submission == null)
-            {
-                _logger.LogError("SubmissionForUpdateDto object sent from client is null.");
-                return BadRequest("Submission ForUpdateDto object is null");
-            }
+            /*  if (submission == null)
+              {
+                  _logger.LogError("SubmissionForUpdateDto object sent from client is null.");
+                  return BadRequest("Submission ForUpdateDto object is null");
+              }
 
-            if (!ModelState.IsValid)
-            {
-                _logger.LogError("Invalid model state for the EmployeeForUpdateDto object");
-                return UnprocessableEntity(ModelState);
-            }
+              if (!ModelState.IsValid)
+              {
+                  _logger.LogError("Invalid model state for the EmployeeForUpdateDto object");
+                  return UnprocessableEntity(ModelState);
+              }
 
 
-            var assignment = _repository.Assignment.GetAssignments(assignmentId, trackChanges: false);
-            if (assignment == null)
-            {
-                _logger.LogInfo($"Assignment with id: {assignmentId} doesn't exist in the database.");
-                return NotFound();
-            }
+              var assignment =await _repository.Assignment.GetAssignmentsAsync(assignmentId, trackChanges: false);
+              if (assignment == null)
+              {
+                  _logger.LogInfo($"Assignment with id: {assignmentId} doesn't exist in the database.");
+                  return NotFound();
+              }
 
-            var submissionEntity = _repository.Submission.GetSubmission(assignmentId, id, trackChanges: true);
-            if (submissionEntity == null)
-            {
-                _logger.LogInfo($"Submission with id: {id} doesn't exist in the database.");
-                return NotFound();
-            }
+              var submissionEntity =await _repository.Submission.GetSubmissionAsync(assignmentId, id, trackChanges: true);
+              if (submissionEntity == null)
+              {
+                  _logger.LogInfo($"Submission with id: {id} doesn't exist in the database.");
+                  return NotFound();
+              } */
+
+           
+            var submissionEntity = HttpContext.Items["submission"] as Submission;
 
             _mapper.Map(submission, submissionEntity);
-            _repository.Save();
+           await  _repository.SaveAsync();
 
             return NoContent();
         }
 
         [HttpPatch("{id}")]
-        public IActionResult PartiallyUpdatesubmissionForAssignment(Guid assignmentId, Guid id, [FromBody] JsonPatchDocument<SubmissionForUpdateDto> patchDoc)
+        [ServiceFilter(typeof(ValidateSubmissionExistsAttribute))]
+        public async Task <IActionResult> PartiallyUpdatesubmissionForAssignment(Guid assignmentId, Guid id, [FromBody] JsonPatchDocument<SubmissionForUpdateDto> patchDoc)
         {
             if (patchDoc == null)
             {
@@ -164,19 +179,21 @@ namespace SchoolMgmtAPI.Controllers
                 return BadRequest("patchDoc object is null");
             }
 
-            var assignment = _repository.Assignment.GetAssignments(assignmentId, trackChanges: false);
-            if (assignment == null)
-            {
-                _logger.LogInfo($"Assignment with id: {assignmentId} doesn't exist in the database.");
-                return NotFound();
-            }
+            /*  var assignment =await _repository.Assignment.GetAssignmentsAsync(assignmentId, trackChanges: false);
+              if (assignment == null)
+              {
+                  _logger.LogInfo($"Assignment with id: {assignmentId} doesn't exist in the database.");
+                  return NotFound();
+              }
 
-            var submissionEntity = _repository.Submission.GetSubmission(assignmentId, id, trackChanges: true);
-            if (submissionEntity == null)
-            {
-                _logger.LogInfo($"Submission with id: {id} doesn't exist in the database.");
-                return NotFound();
-            }
+              var submissionEntity = await _repository.Submission.GetSubmissionAsync(assignmentId, id, trackChanges: true);
+              if (submissionEntity == null)
+              {
+                  _logger.LogInfo($"Submission with id: {id} doesn't exist in the database.");
+                  return NotFound();
+              } */
+
+            var submissionEntity = HttpContext.Items["submission"] as Submission;
 
             var submissionToPatch = _mapper.Map<SubmissionForUpdateDto>(submissionEntity);
 
@@ -194,7 +211,7 @@ namespace SchoolMgmtAPI.Controllers
 
             _mapper.Map(submissionToPatch, submissionEntity);
 
-            _repository.Save();
+           await _repository.SaveAsync();
 
             return NoContent();
         }
